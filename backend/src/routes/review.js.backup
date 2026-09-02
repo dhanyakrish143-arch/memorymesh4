@@ -1,0 +1,302 @@
+﻿import express from "express";
+import Card from "../models/Card.js";
+import User from "../models/User.js";
+import requireAuth from "../middleware/auth.js";
+import { updateMastery } from "../core/bkt.js";
+import { computeNextReview } from "../core/schedule.js";
+
+const router = express.Router();
+
+router.use(requireAuth);
+
+function startOfDay(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function unlockAchievement(user, achievement) {
+  const rewards = {
+    first_review: 10,
+    "10_correct": 20,
+    "3_day_streak": 25,
+    "7_day_streak": 50,
+    "50_reviews": 50,
+    "100_reviews": 100,
+    first_mastered: 20,
+    "10_mastered": 75,
+  };
+
+  if (!user.achievements.includes(achievement)) {
+    user.achievements.push(achievement);
+    user.gems = (user.gems || 0) + (rewards[achievement] || 0);
+
+    return true;
+  }
+
+  return false;
+}
+
+router.get("/due", async (req, res) => {
+  try {
+    const due = await Card.find({
+      userId: req.userId,
+      nextReviewDate: { $lte: new Date() },
+    });
+
+    res.json(due);
+  } catch (err) {
+    console.error("Failed to load due cards:", err);
+    res.status(500).json({ error: "Failed to load due cards" });
+  }
+});
+
+router.post("/submit", async (req, res) => {
+  try {
+    const { cardId, correct } = req.body;
+
+    const card = await Card.findOne({
+      _id: cardId,
+      userId: req.userId,
+    });
+
+    if (!card) {
+      return res.status(404).json({ error: "Card not found" });
+    }
+
+    card.p_l = updateMastery(card.p_l, correct);
+
+    const { s_coefficient, nextReviewDate } =
+      computeNextReview(card.s_coefficient, correct);
+
+    card.s_coefficient = s_coefficient;
+    card.nextReviewDate = nextReviewDate;
+
+    card.reviewCount += 1;
+
+    if (correct) {
+      card.correctCount += 1;
+    }
+
+    card.reviewHistory.push({
+      reviewedAt: new Date(),
+      correct: Boolean(correct),
+    });
+
+    card.mastered = card.p_l > 0.9;
+
+    await card.save();
+
+    const user = await User.findById(req.userId);
+
+    if (user) {
+      const today = startOfDay(new Date());
+
+      const lastActive = user.lastActiveDate
+        ? startOfDay(user.lastActiveDate)
+        : null;
+
+      const oneDay = 24 * 60 * 60 * 1000;
+
+      if (!lastActive) {
+        user.streak = 1;
+      } else {
+        const daysSinceLastActive = Math.round(
+          (today - lastActive) / oneDay
+        );
+
+        if (daysSinceLastActive === 0) {
+          if ((user.streak || 0) === 0) {
+            user.streak = 1;
+          }
+        } else if (daysSinceLastActive === 1) {
+          user.streak = (user.streak || 0) + 1;
+        } else {
+          user.streak = 1;
+        }
+      }
+
+      user.lastActiveDate = new Date();
+
+      const xpEarned = correct ? 10 : 2;
+
+      user.xp = (user.xp || 0) + xpEarned;
+      user.level = Math.floor(user.xp / 100) + 1;
+
+      // Achievements
+      const totalReviews = await Card.aggregate([
+        {
+          $match: {
+            userId: user._id,
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            total: {
+              $sum: "$reviewCount",
+            },
+            correct: {
+              $sum: "$correctCount",
+            },
+          },
+        },
+      ]);
+
+      const reviewStats = totalReviews[0] || {
+        total: 0,
+        correct: 0,
+      };
+
+      const masteredCount = await Card.countDocuments({
+        userId: user._id,
+        mastered: true,
+      });
+
+      if (reviewStats.total >= 1) {
+        unlockAchievement(user, "first_review");
+      }
+
+      if (reviewStats.total >= 50) {
+        unlockAchievement(user, "50_reviews");
+      }
+
+      if (reviewStats.total >= 100) {
+        unlockAchievement(user, "100_reviews");
+      }
+
+      if (reviewStats.correct >= 10) {
+        unlockAchievement(user, "10_correct");
+      }
+
+      if (user.streak >= 3) {
+        unlockAchievement(user, "3_day_streak");
+      }
+
+      if (user.streak >= 7) {
+        unlockAchievement(user, "7_day_streak");
+      }
+
+      if (masteredCount >= 1) {
+        unlockAchievement(user, "first_mastered");
+      }
+
+      if (masteredCount >= 10) {
+        unlockAchievement(user, "10_mastered");
+      }
+
+      await user.save();
+    }
+
+    res.json(card);
+  } catch (err) {
+    console.error("Failed to submit review:", err);
+    res.status(500).json({ error: "Failed to submit review" });
+  }
+});
+
+router.get("/activity", async (req, res) => {
+  try {
+    const cards = await Card.find({
+      userId: req.userId,
+      "reviewHistory.0": { $exists: true },
+    }).select("reviewHistory");
+
+    const activity = {};
+
+    for (const card of cards) {
+      for (const review of card.reviewHistory || []) {
+        const date = new Date(review.reviewedAt)
+          .toISOString()
+          .slice(0, 10);
+
+        if (!activity[date]) {
+          activity[date] = {
+            date,
+            reviews: 0,
+            correct: 0,
+          };
+        }
+
+        activity[date].reviews += 1;
+
+        if (review.correct) {
+          activity[date].correct += 1;
+        }
+      }
+    }
+
+    const result = Object.values(activity)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-30);
+
+    res.json(result);
+  } catch (err) {
+    console.error("Failed to load review activity:", err);
+    res.status(500).json({
+      error: "Failed to load review activity",
+    });
+  }
+});
+router.get("/stats", async (req, res) => {
+  try {
+    const cards = await Card.find({
+      userId: req.userId,
+    });
+
+    const totalReviews = cards.reduce(
+      (sum, card) => sum + (card.reviewCount || 0),
+      0
+    );
+
+    const correct = cards.reduce(
+      (sum, card) => sum + (card.correctCount || 0),
+      0
+    );
+
+    const mastered = cards.filter(
+      (card) => card.mastered === true
+    ).length;
+
+    const accuracy =
+      totalReviews > 0
+        ? Math.round((correct / totalReviews) * 100)
+        : 0;
+
+    const user = await User.findById(req.userId).select(
+      "streak lastActiveDate xp level achievements gems"
+    );
+
+    res.json({
+      totalReviews,
+      correct,
+      accuracy,
+      mastered,
+      totalCards: cards.length,
+      streak: user?.streak ?? 0,
+      lastActiveDate: user?.lastActiveDate ?? null,
+      xp: user?.xp ?? 0,
+      level: user?.level ?? 1,
+      achievements: user?.achievements ?? [],
+      gems: user?.gems ?? 0,
+    });
+  } catch (err) {
+    console.error("Failed to load review stats:", err);
+    res.status(500).json({
+      error: "Failed to load review stats",
+    });
+  }
+});
+
+export default router;
+
+
+
+
+
+
+
+
+
+
+

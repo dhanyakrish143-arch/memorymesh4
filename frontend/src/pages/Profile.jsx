@@ -1,0 +1,256 @@
+﻿import { useEffect, useState } from "react";
+import client from "../api/client";
+import { useAuth } from "../contexts/AuthContext";
+
+export default function Profile() {
+  const { user, updateUser } = useAuth();
+
+  const [name, setName] = useState("");
+  const [userClass, setUserClass] = useState(10);
+  const [board, setBoard] = useState("CBSE");
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const { data } = await client.get("/auth/me");
+
+        setName(data.name || "");
+        setUserClass(data.class || 10);
+        setBoard(data.board || "CBSE");
+      } catch (err) {
+        console.error(
+          "Failed to load profile:",
+          err
+        );
+
+        setError(
+          err.response?.data?.error ||
+          "Unable to load your profile."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, []);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+
+    setSaving(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const { data } = await client.put(
+        "/auth/profile",
+        {
+          name,
+          class: Number(userClass),
+          board,
+        }
+      );
+
+      updateUser(data.user);
+
+      setName(data.user.name);
+      setUserClass(data.user.class);
+      setBoard(data.user.board);
+
+      setSuccess(
+        "Your profile has been updated successfully."
+      );
+    } catch (err) {
+      console.error(
+        "Failed to update profile:",
+        err
+      );
+
+      setError(
+        err.response?.data?.error ||
+        "Unable to update your profile."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="page profile-page">
+        <div className="progress-loading">
+          <div className="loader" />
+          <p>Loading your profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page profile-page">
+
+      <section className="profile-hero">
+        <div>
+          <span className="eyebrow">
+            MEMORYMESH ACCOUNT
+          </span>
+
+          <h1 className="brand">
+            Your Profile
+          </h1>
+
+          <p className="subtitle">
+            Keep your learning details up to date.
+          </p>
+        </div>
+
+        
+      </section>
+
+      <section className="card profile-card">
+
+        <div className="profile-section-heading">
+          <span className="eyebrow">
+            PERSONAL DETAILS
+          </span>
+
+          <h2>
+            Account information
+          </h2>
+        </div>
+
+        <form
+          onSubmit={handleSave}
+          className="profile-form"
+        >
+
+          <label className="profile-field">
+            <span>
+              Full name
+            </span>
+
+            <input
+              type="text"
+              value={name}
+              onChange={(e) =>
+                setName(e.target.value)
+              }
+              placeholder="Your name"
+              required
+            />
+          </label>
+
+          <label className="profile-field">
+            <span>
+              Email
+            </span>
+
+            <input
+              type="email"
+              value={user?.email || ""}
+              disabled
+            />
+
+            <small>
+              Email cannot be changed here.
+            </small>
+          </label>
+
+          <div className="profile-form-row">
+
+            <label className="profile-field">
+              <span>
+                Class
+              </span>
+
+              <select
+                value={userClass}
+                onChange={(e) =>
+                  setUserClass(e.target.value)
+                }
+              >
+                {Array.from(
+                  { length: 8 },
+                  (_, index) => index + 5
+                ).map((value) => (
+                  <option
+                    key={value}
+                    value={value}
+                  >
+                    Class {value}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="profile-field">
+              <span>
+                Board
+              </span>
+
+              <select
+                value={board}
+                onChange={(e) =>
+                  setBoard(e.target.value)
+                }
+              >
+                <option value="CBSE">
+                  CBSE
+                </option>
+
+                <option value="ICSE">
+                  ICSE
+                </option>
+
+                <option value="State">
+                  State Board
+                </option>
+              </select>
+            </label>
+
+          </div>
+
+          {error && (
+            <div className="profile-message profile-message-error">
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="profile-message profile-message-success">
+              {success}
+            </div>
+          )}
+
+          <div className="profile-actions">
+
+            <button
+              type="submit"
+              className="primary-button"
+              disabled={saving}
+            >
+              {saving
+                ? "Saving..."
+                : "Save Changes"}
+            </button>
+
+          </div>
+
+        </form>
+
+      </section>
+
+    </div>
+  );
+}
+

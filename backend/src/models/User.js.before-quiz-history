@@ -1,0 +1,30 @@
+﻿import mongoose from "mongoose";
+
+const userSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    email: { type: String, required: true, unique: true, lowercase: true },
+    passwordHash: { type: String, required: true },
+    class: { type: Number, min: 5, max: 12, required: true },
+    board: { type: String, enum: ["CBSE", "ICSE", "State"], default: "CBSE" },
+
+    streak: { type: Number, default: 0 },
+    streakFreezes: { type: Number, default: 0 },
+    gems: { type: Number, default: 20 },
+
+    achievements: {
+      type: [String],
+      default: [],
+    },
+
+    xp: { type: Number, default: 0 },
+    level: { type: Number, default: 1 },
+
+    hearts: { type: Number, default: 5 },
+    lastHeartRefill: { type: Date, default: Date.now },
+    lastActiveDate: { type: Date, default: Date.now },
+  },
+  { timestamps: true }
+);
+
+export default mongoose.model("User", userSchema);

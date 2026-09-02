@@ -1,0 +1,191 @@
+﻿import { useEffect, useState } from "react";
+import client from "../api/client";
+
+const achievementDefinitions = [
+  {
+    id: "first_review",
+    icon: "🥇",
+    title: "First Review",
+    description: "Complete your first review.",
+    reward: 10,
+  },
+  {
+    id: "10_correct",
+    icon: "🎯",
+    title: "10 Correct",
+    description: "Answer 10 questions correctly.",
+    reward: 20,
+  },
+  {
+    id: "3_day_streak",
+    icon: "🔥",
+    title: "3-Day Streak",
+    description: "Study for 3 days in a row.",
+    reward: 25,
+  },
+  {
+    id: "7_day_streak",
+    icon: "🔥",
+    title: "7-Day Streak",
+    description: "Study for 7 days in a row.",
+    reward: 50,
+  },
+  {
+    id: "50_reviews",
+    icon: "📚",
+    title: "50 Reviews",
+    description: "Complete 50 reviews.",
+    reward: 50,
+  },
+  {
+    id: "100_reviews",
+    icon: "🏆",
+    title: "100 Reviews",
+    description: "Complete 100 reviews.",
+    reward: 100,
+  },
+  {
+    id: "first_mastered",
+    icon: "🧠",
+    title: "First Mastered",
+    description: "Master your first card.",
+    reward: 20,
+  },
+  {
+    id: "10_mastered",
+    icon: "🧠",
+    title: "10 Mastered",
+    description: "Master 10 cards.",
+    reward: 75,
+  },
+];
+
+export default function Achievements() {
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    client
+      .get("/review/stats")
+      .then(({ data }) => setStats(data))
+      .catch((err) =>
+        console.error("Failed to load achievements:", err)
+      )
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="page progress-page">
+        <div className="progress-loading">
+          <div className="loader" />
+          <p>Loading your achievements...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const achievements = stats?.achievements ?? [];
+  const gems = stats?.gems ?? 0;
+
+  const unlockedCount = achievementDefinitions.filter(
+    (achievement) => achievements.includes(achievement.id)
+  ).length;
+
+  const unlockedRewards = achievementDefinitions
+    .filter((achievement) => achievements.includes(achievement.id))
+    .reduce((sum, achievement) => sum + achievement.reward, 0);
+
+  return (
+    <div className="page progress-page achievements-page">
+      <div className="progress-hero">
+        <div>
+          <span className="eyebrow">MEMORYMESH REWARDS</span>
+
+          <h1 className="brand">Achievements</h1>
+
+          <p className="subtitle">
+            Complete reviews, build streaks, and master your cards.
+          </p>
+        </div>
+
+        <div className="achievements-hero-stats">
+          <div className="progress-hero-badge">
+            <span>Unlocked</span>
+            <strong>
+              {unlockedCount} / {achievementDefinitions.length}
+            </strong>
+          </div>
+
+          <div className="progress-hero-badge">
+            <span>Rewards</span>
+            <strong>{unlockedRewards} 💎</strong>
+          </div>
+
+          <div className="progress-hero-badge">
+            <span>Your Gems</span>
+            <strong>{gems} 💎</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="card achievements-section">
+        <div className="achievements-grid">
+          {achievementDefinitions.map((achievement) => {
+            const unlocked = achievements.includes(
+              achievement.id
+            );
+
+            return (
+              <div
+                key={achievement.id}
+                className={`achievement-card ${
+                  unlocked
+                    ? "achievement-unlocked"
+                    : "achievement-locked"
+                }`}
+              >
+                <div className="achievement-icon">
+                  {unlocked ? achievement.icon : "🔒"}
+                </div>
+
+                <div className="achievement-content">
+                  <h3>{achievement.title}</h3>
+
+                  <p>{achievement.description}</p>
+
+                  <div className="achievement-reward">
+                    +{achievement.reward} 💎
+                  </div>
+
+                  {unlocked && (
+                    <strong className="achievement-status">
+                      Unlocked ✓
+                    </strong>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="card achievements-footer">
+        <div className="achievements-footer-icon">
+          💎
+        </div>
+
+        <div>
+          <span className="eyebrow">KEEP EARNING</span>
+
+          <h2>More achievements, more gems</h2>
+
+          <p>
+            Keep reviewing and mastering cards to unlock
+            more rewards.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

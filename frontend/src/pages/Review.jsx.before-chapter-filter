@@ -1,0 +1,446 @@
+﻿import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import client from "../api/client";
+import Flashcard from "../components/Flashcard";
+
+const SESSION_OPTIONS = [10, 20, 30];
+
+export default function Review() {
+  const [cards, setCards] = useState([]);
+  const [allDueCards, setAllDueCards] = useState([]);
+  const [sessionTotal, setSessionTotal] = useState(0);
+  const [completed, setCompleted] = useState(0);
+
+  const [sessionSize, setSessionSize] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState("");
+
+  const loadCards = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const { data } = await client.get("/review/due");
+
+      const dueCards = Array.isArray(data) ? data : [];
+
+      setAllDueCards(dueCards);
+      setCards([]);
+      setSessionTotal(0);
+      setCompleted(0);
+      setSessionSize(null);
+    } catch (err) {
+      console.error("Failed to load review cards:", err);
+      setError("Unable to load your review cards.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCards();
+  }, []);
+
+  const startSession = (size) => {
+    setStarting(true);
+
+    const selectedCards =
+      size === "all"
+        ? allDueCards
+        : allDueCards.slice(0, size);
+
+    setCards(selectedCards);
+    setSessionTotal(selectedCards.length);
+    setCompleted(0);
+    setSessionSize(size);
+
+    setStarting(false);
+  };
+
+  const handleDone = () => {
+    setCompleted((current) => current + 1);
+    setCards((current) => current.slice(1));
+  };
+
+  if (loading) {
+    return (
+      <div className="page review-page">
+        <div className="review-loading-card">
+          <div className="review-spinner" />
+          <h2>Preparing your review</h2>
+          <p>Getting your cards ready...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="page review-page">
+        <div className="review-error">
+          <div className="review-error-icon">!</div>
+
+          <p className="eyebrow">REVIEW</p>
+
+          <h1>Something went wrong</h1>
+
+          <p className="subtitle">{error}</p>
+
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={loadCards}
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (allDueCards.length === 0) {
+    return (
+      <div className="page review-page">
+        <div className="review-complete">
+          <div className="review-complete-icon">✓</div>
+
+          <p className="eyebrow">ALL CAUGHT UP</p>
+
+          <h1 className="brand">Great work!</h1>
+
+          <p className="subtitle">
+            You don't have any cards due for review right now.
+          </p>
+
+          <div className="review-complete-message">
+            <span>🎉</span>
+
+            <p>
+              Come back later to keep your memory strong.
+            </p>
+          </div>
+
+          <div className="review-actions">
+            <Link
+              to="/progress"
+              className="btn btn-primary"
+            >
+              View Progress
+            </Link>
+
+            <Link
+              to="/"
+              className="review-home-button"
+            >
+              Back to Home
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (sessionSize === null) {
+    return (
+      <div className="page review-page">
+
+        <section className="review-session-header">
+          <div>
+            <p className="eyebrow">DAILY REVIEW</p>
+
+            <h1>Choose your session</h1>
+
+            <p>
+              You have{" "}
+              <strong>{allDueCards.length}</strong>{" "}
+              cards due.
+            </p>
+          </div>
+
+          <div className="review-session-score">
+            <strong>{allDueCards.length}</strong>
+            <span>due</span>
+          </div>
+        </section>
+
+        <section className="review-session-choice-card">
+
+          <div className="review-session-choice-heading">
+            <span className="eyebrow">
+              SESSION SIZE
+            </span>
+
+            <h2>
+              How many cards do you want to review?
+            </h2>
+
+            <p>
+              We'll start with the cards that need the most attention.
+            </p>
+          </div>
+
+          <div className="review-session-options">
+
+            {SESSION_OPTIONS.map((size) => {
+              const available =
+                Math.min(size, allDueCards.length);
+
+              return (
+                <button
+                  type="button"
+                  key={size}
+                  className="review-session-option"
+                  onClick={() => startSession(size)}
+                  disabled={starting}
+                >
+                  <strong>{available}</strong>
+
+                  <span>
+                    {available === 1
+                      ? "card"
+                      : "cards"}
+                  </span>
+
+                  <small>
+                    {size >= allDueCards.length
+                      ? "Review all available"
+                      : `Up to ${size} cards`}
+                  </small>
+                </button>
+              );
+            })}
+
+            <button
+              type="button"
+              className="review-session-option review-session-option-all"
+              onClick={() => startSession("all")}
+              disabled={starting}
+            >
+              <strong>{allDueCards.length}</strong>
+
+              <span>
+                {allDueCards.length === 1
+                  ? "card"
+                  : "cards"}
+              </span>
+
+              <small>
+                Review everything due
+              </small>
+            </button>
+
+          </div>
+
+          <div className="review-session-choice-tip">
+            <span>🎯</span>
+
+            <p>
+              Smart Review puts weaker cards first so your
+              study time is focused where it matters most.
+            </p>
+          </div>
+
+        </section>
+      </div>
+    );
+  }
+
+  if (cards.length === 0) {
+    return (
+      <div className="page review-page">
+
+        <div className="review-complete">
+
+          <div className="review-complete-icon">
+            ✓
+          </div>
+
+          <p className="eyebrow">
+            SESSION COMPLETE
+          </p>
+
+          <h1 className="brand">
+            Nice work!
+          </h1>
+
+          <p className="subtitle">
+            You completed your selected review session.
+          </p>
+
+          <div className="review-results">
+
+            <div className="review-result">
+              <strong>{completed}</strong>
+              <span>Completed</span>
+            </div>
+
+            <div className="review-result">
+              <strong>{sessionTotal}</strong>
+              <span>Total cards</span>
+            </div>
+
+            <div className="review-result">
+              <strong>100%</strong>
+              <span>Session</span>
+            </div>
+
+          </div>
+
+          <div className="review-complete-message">
+            <span>🔥</span>
+
+            <p>
+              Consistency is the key to building long-term memory.
+            </p>
+          </div>
+
+          <div className="review-actions">
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setCards([]);
+                setSessionTotal(0);
+                setCompleted(0);
+                setSessionSize(null);
+              }}
+            >
+              Choose Another Session
+            </button>
+
+            <Link
+              to="/progress"
+              className="review-home-button"
+            >
+              View Progress
+            </Link>
+
+          </div>
+
+        </div>
+
+      </div>
+    );
+  }
+
+  const currentCard = cards[0];
+
+  const remaining = cards.length;
+
+  const progress = Math.round(
+    (completed / sessionTotal) * 100
+  );
+
+  return (
+    <div className="page review-page">
+
+      <section className="review-session-header">
+
+        <div>
+          <p className="eyebrow">
+            DAILY REVIEW
+          </p>
+
+          <h1>
+            Keep learning
+          </h1>
+
+          <p>
+            Strengthen what you already know.
+          </p>
+        </div>
+
+        <div className="review-session-score">
+          <strong>{completed}</strong>
+          <span>/ {sessionTotal}</span>
+        </div>
+
+      </section>
+
+      <section className="review-progress-card">
+
+        <div className="review-progress-top">
+          <span>
+            Session progress
+          </span>
+
+          <strong>
+            {progress}%
+          </strong>
+        </div>
+
+        <div className="review-progress">
+
+          <div
+            className="review-progress-fill"
+            style={{
+              width: `${progress}%`,
+            }}
+          />
+
+        </div>
+
+        <div className="review-progress-bottom">
+
+          <span>
+            {completed} completed
+          </span>
+
+          <span>
+            {remaining} remaining
+          </span>
+
+        </div>
+
+      </section>
+
+      <div className="review-instruction">
+
+        <span className="review-instruction-icon">
+          💡
+        </span>
+
+        <div>
+          <strong>
+            Think before you reveal
+          </strong>
+
+          <p>
+            Try to remember the answer before tapping the card.
+          </p>
+        </div>
+
+      </div>
+
+      <div className="review-priority-badge">
+
+        <span>
+          🎯
+        </span>
+
+        <strong>
+          {currentCard.priorityReason ||
+            "Due for review"}
+        </strong>
+
+      </div>
+
+      <div className="review-card-container">
+
+        <Flashcard
+          key={currentCard._id}
+          card={currentCard}
+          onDone={handleDone}
+        />
+
+      </div>
+
+      <p className="review-hint">
+        Your answers help MemoryMesh decide when you should see this card again.
+      </p>
+
+    </div>
+  );
+}

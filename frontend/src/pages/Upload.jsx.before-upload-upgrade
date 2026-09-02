@@ -1,0 +1,126 @@
+import { useState } from "react";
+import client from "../api/client";
+
+
+export default function Upload() {
+  const [file, setFile] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState(null);
+  const [selected, setSelected] = useState(new Set());
+  const [saved, setSaved] = useState(false);
+
+  const handleFileChange = (e) => {
+    if (e.target.files?.[0]) {
+      setFile(e.target.files[0]);
+      setResult(null);
+      setSaved(false);
+      setError("");
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setLoading(true);
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const { data } = await client.post("/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setResult(data);
+      setSelected(new Set(data.flashcards.map((_, i) => i)));
+    } catch (err) {
+      setError(err.response?.data?.error || "Upload failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleCard = (i) => {
+    const next = new Set(selected);
+    if (next.has(i)) next.delete(i);
+    else next.add(i);
+    setSelected(next);
+  };
+
+  const saveSelected = async () => {
+    if (!result) return;
+    const chosen = result.flashcards.filter((_, i) => selected.has(i));
+    await client.post("/upload/save-cards", {
+      flashcards: chosen,
+      subject: result.subject,
+      chapter: result.chapter_guess,
+      class: result.class_guess,
+    });
+    setSaved(true);
+  };
+
+  return (
+    <div className="page">
+      <h1 className="brand">Upload notes</h1>
+      <p className="subtitle">Upload a PDF, DOCX, or TXT file and MemoryMesh will generate flashcards from it.</p>
+
+      <div className="dropzone">
+        <input type="file" accept=".pdf,.docx,.txt" onChange={handleFileChange} />
+        {file && <p className="file-name">Selected: {file.name}</p>}
+      </div>
+
+      <button
+        onClick={handleUpload}
+        disabled={!file || loading}
+        className="btn btn-primary btn-block"
+      >
+        {loading ? "Generating flashcards…" : "Generate flashcards"}
+      </button>
+
+      {error && <p className="error-text">{error}</p>}
+
+      {result && (
+        <div>
+          <h3 className="result-header">{result.subject} — {result.chapter_guess} (Class {result.class_guess})</h3>
+          <p className="result-meta">{result.summary}</p>
+
+          <p className="section-label">Generated flashcards — select which to save</p>
+          {result.flashcards.map((card, i) => (
+            <label
+              key={i}
+              className={`flash-option ${selected.has(i) ? "selected" : ""}`}
+            >
+              <input
+                type="checkbox"
+                checked={selected.has(i)}
+                onChange={() => toggleCard(i)}
+              />
+              <div>
+                <strong>{card.question}</strong>
+                <p>{card.answer}</p>
+              </div>
+            </label>
+          ))}
+
+          <div className="save-bar">
+            <button
+              onClick={saveSelected}
+              disabled={selected.size === 0 || saved}
+              className="btn btn-success"
+            >
+              {saved ? "Saved!" : `Save ${selected.size} card(s) to my deck`}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+
+
+
+
+
+
+
+

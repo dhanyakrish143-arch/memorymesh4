@@ -1,0 +1,208 @@
+﻿import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import client from "../api/client";
+
+export default function Cards() {
+  const [cards, setCards] = useState([]);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadCards = async () => {
+      try {
+        const { data } = await client.get("/cards");
+        setCards(data || []);
+      } catch (err) {
+        console.error("Failed to load cards:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCards();
+  }, []);
+
+  const filteredCards = useMemo(() => {
+    const query = search.toLowerCase().trim();
+
+    return cards.filter((card) => {
+      const matchesSearch =
+        !query ||
+        card.question?.toLowerCase().includes(query) ||
+        card.answer?.toLowerCase().includes(query) ||
+        card.subject?.toLowerCase().includes(query) ||
+        card.chapter?.toLowerCase().includes(query);
+
+      const matchesFilter =
+        filter === "all" ||
+        (filter === "mastered" && card.mastered) ||
+        (filter === "learning" && !card.mastered);
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [cards, search, filter]);
+
+  const deleteCard = async (id) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this card?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await client.delete(`/cards/${id}`);
+      setCards((current) => current.filter((card) => card._id !== id));
+    } catch (err) {
+      console.error("Failed to delete card:", err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="page">
+        <p>Loading your cards...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page cards-page">
+      <div className="cards-header">
+        <div>
+          <p className="eyebrow">MEMORYMESH</p>
+
+          <h1 className="brand">Your Cards</h1>
+
+          <p className="subtitle">
+            Browse and manage your flashcards.
+          </p>
+        </div>
+
+        <div className="cards-count">
+          <strong>{cards.length}</strong>
+          <span>cards</span>
+        </div>
+      </div>
+
+      <div className="cards-toolbar">
+        <input
+          type="text"
+          placeholder="Search your cards..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="cards-search"
+        />
+
+        <div className="cards-filters">
+          <button
+            type="button"
+            className={filter === "all" ? "active" : ""}
+            onClick={() => setFilter("all")}
+          >
+            All
+          </button>
+
+          <button
+            type="button"
+            className={filter === "learning" ? "active" : ""}
+            onClick={() => setFilter("learning")}
+          >
+            Learning
+          </button>
+
+          <button
+            type="button"
+            className={filter === "mastered" ? "active" : ""}
+            onClick={() => setFilter("mastered")}
+          >
+            Mastered
+          </button>
+        </div>
+      </div>
+
+      <div className="cards-results">
+        <span>
+          Showing {filteredCards.length} of {cards.length} cards
+        </span>
+      </div>
+
+      {filteredCards.length === 0 ? (
+        <div className="card cards-empty">
+          <h2>No cards found</h2>
+
+          <p>
+            Try a different search or upload more study material.
+          </p>
+        </div>
+      ) : (
+        <div className="cards-list">
+          {filteredCards.map((card) => (
+            <div className="card library-card" key={card._id}>
+              <div className="library-card-top">
+                <div>
+                  {card.subject && (
+                    <span className="card-subject">
+                      {card.subject}
+                    </span>
+                  )}
+
+                  {card.chapter && (
+                    <span className="card-chapter">
+                      {card.chapter}
+                    </span>
+                  )}
+                </div>
+
+                <span
+                  className={
+                    card.mastered
+                      ? "card-status mastered"
+                      : "card-status learning"
+                  }
+                >
+                  {card.mastered ? "✓ Mastered" : "Learning"}
+                </span>
+              </div>
+
+              <h2>{card.question}</h2>
+
+              <p className="library-answer">
+                {card.answer}
+              </p>
+
+              <div className="library-card-footer">
+                <div className="library-card-stats">
+                  <span>
+                    Reviews: {card.reviewCount || 0}
+                  </span>
+
+                  <span>
+                    Correct: {card.correctCount || 0}
+                  </span>
+                </div>
+
+                <div className="library-card-actions">
+                  <Link
+                    to="/review"
+                    className="study-card-button"
+                  >
+                    Study →
+                  </Link>
+
+                  <button
+                    type="button"
+                    className="delete-card-button"
+                    onClick={() => deleteCard(card._id)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

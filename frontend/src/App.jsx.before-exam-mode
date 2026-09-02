@@ -1,0 +1,394 @@
+﻿import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  Link,
+  useLocation,
+} from "react-router-dom";
+
+import { useEffect, useRef, useState } from "react";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+
+import Login from "./pages/Login";
+import Home from "./pages/Home";
+import Learn from "./pages/Learn";
+import Upload from "./pages/Upload";
+import Progress from "./pages/Progress";
+import Cards from "./pages/Cards";
+import Activity from "./pages/Activity";
+import Achievements from "./pages/Achievements";
+import Review from "./pages/Review";
+import Quiz from "./pages/Quiz";
+import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
+import StudyAssistant from "./pages/StudyAssistant";
+import StudyPlan from "./pages/StudyPlan";
+import QuizHistory from "./pages/QuizHistory";
+
+function Private({ children }) {
+  const { user } = useAuth();
+
+  return user ? children : <Navigate to="/login" />;
+}
+
+function Nav() {
+  const { user, logout } = useAuth();
+  const location = useLocation();
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        accountRef.current &&
+        !accountRef.current.contains(event.target)
+      ) {
+        setAccountOpen(false);
+      }
+    };
+
+    document.addEventListener(
+      "mousedown",
+      handleClickOutside
+    );
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleClickOutside
+      );
+    };
+  }, []);
+
+  if (!user) return null;
+
+  return (
+    <div className="nav">
+      <span className="nav-brand">MemoryMesh</span>
+
+      <Link
+        to="/"
+        className={location.pathname === "/" ? "active" : ""}
+      >
+        Home
+      </Link>
+
+      <Link
+        to="/learn"
+        className={location.pathname === "/learn" ? "active" : ""}
+      >
+        Learn
+      </Link>
+
+      <Link
+        to="/upload"
+        className={location.pathname === "/upload" ? "active" : ""}
+      >
+        Upload
+      </Link>
+
+      <Link
+        to="/cards"
+        className={location.pathname === "/cards" ? "active" : ""}
+      >
+        Flashcards
+      </Link>
+
+      <Link
+        to="/progress"
+        className={location.pathname === "/progress" ? "active" : ""}
+      >
+        Progress
+      </Link>
+
+      <Link
+        to="/review"
+        className={location.pathname === "/review" ? "active" : ""}
+      >
+        Review
+      </Link>
+
+      <Link
+        to="/quiz"
+        className={location.pathname === "/quiz" ? "active" : ""}
+      >
+        Quiz
+      </Link>
+
+      <Link
+        to="/quiz-history"
+        className={
+          location.pathname === "/quiz-history"
+            ? "active"
+            : ""
+        }
+      >
+        Quiz History
+      </Link>
+
+      <Link
+        to="/activity"
+        className={location.pathname === "/activity" ? "active" : ""}
+      >
+        Activity
+      </Link>
+
+
+      <Link
+        to="/achievements"
+        className={
+          location.pathname === "/achievements"
+            ? "active"
+            : ""
+        }
+      >
+        Achievements
+      </Link>
+
+      <div className="nav-spacer" />
+
+      <div className="nav-account" ref={accountRef}>
+        <button
+          type="button"
+          className="nav-avatar-button"
+          onClick={() =>
+            setAccountOpen((current) => !current)
+          }
+          aria-label="Open account menu"
+          aria-expanded={accountOpen}
+        >
+          {(user.name || user.email || "?")
+            .charAt(0)
+            .toUpperCase()}
+        </button>
+
+        {accountOpen && (
+          <div className="nav-account-menu">
+
+            <div className="nav-account-header">
+              <span className="nav-account-avatar">
+                {(user.name || user.email || "?")
+                  .charAt(0)
+                  .toUpperCase()}
+              </span>
+
+              <div>
+                <strong>
+                  {user.name || "User"}
+                </strong>
+
+                <span>
+                  {user.email}
+                </span>
+              </div>
+            </div>
+
+            <div className="nav-account-divider" />
+
+            <Link
+              to="/profile"
+              className="nav-account-item"
+              onClick={() => setAccountOpen(false)}
+            >
+              <span>Profile</span>
+            </Link>
+
+            <Link
+              to="/settings"
+              className="nav-account-item"
+              onClick={() => setAccountOpen(false)}
+            >
+              <span>Settings</span>
+            </Link>
+
+            <div className="nav-account-divider" />
+
+            <Link
+              to="/assistant"
+              className="nav-account-item"
+              onClick={() => setAccountOpen(false)}
+            >
+              <span>Study Assistant</span>
+            </Link>
+
+            <Link
+              to="/study-plan"
+              className="nav-account-item"
+              onClick={() => setAccountOpen(false)}
+            >
+              <span>AI Study Plan</span>
+            </Link>
+
+            <button
+              type="button"
+              className="nav-account-item nav-account-logout"
+              onClick={logout}
+            >
+              <span>Logout</span>
+            </button>
+
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AppRoutes() {
+  return (
+    <>
+      <Nav />
+
+      <Routes>
+        <Route
+          path="/quiz-history"
+          element={
+            <Private>
+              <QuizHistory />
+            </Private>
+          }
+        />
+        <Route path="/login" element={<Login />} />
+
+        <Route
+          path="/"
+          element={
+            <Private>
+              <Home />
+            </Private>
+          }
+        />
+
+        <Route
+          path="/learn"
+          element={
+            <Private>
+              <Learn />
+            </Private>
+          }
+        />
+
+        <Route
+          path="/upload"
+          element={
+            <Private>
+              <Upload />
+            </Private>
+          }
+        />
+
+        <Route
+          path="/progress"
+          element={
+            <Private>
+              <Progress />
+            </Private>
+          }
+        />
+
+        <Route
+          path="/cards"
+          element={
+            <Private>
+              <Cards />
+            </Private>
+          }
+        />
+
+        <Route
+          path="/activity"
+          element={
+            <Private>
+              <Activity />
+            </Private>
+          }
+        />
+
+        <Route
+          path="/profile"
+          element={
+            <Private>
+              <Profile />
+            </Private>
+          }
+        />
+
+        <Route
+          path="/study-plan"
+          element={
+            <Private>
+              <StudyPlan />
+            </Private>
+          }
+        />
+        <Route
+          path="/assistant"
+          element={
+            <Private>
+              <StudyAssistant />
+            </Private>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <Private>
+              <Settings />
+            </Private>
+          }
+        />
+        <Route
+          path="/achievements"
+          element={
+            <Private>
+              <Achievements />
+            </Private>
+          }
+        />
+
+        <Route
+          path="/review"
+          element={
+            <Private>
+              <Review />
+            </Private>
+          }
+        />
+        <Route
+          path="/quiz"
+          element={
+            <Private>
+              <Quiz />
+            </Private>
+          }
+        />
+      </Routes>
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

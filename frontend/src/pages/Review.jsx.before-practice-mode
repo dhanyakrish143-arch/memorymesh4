@@ -1,0 +1,753 @@
+﻿import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import client from "../api/client";
+import Flashcard from "../components/Flashcard";
+
+const SESSION_OPTIONS = [10, 20, 30];
+
+export default function Review() {
+  const location = useLocation();
+
+  const [allDueCards, setAllDueCards] = useState([]);
+  const [cards, setCards] = useState([]);
+
+  const [sessionTotal, setSessionTotal] = useState(0);
+  const [completed, setCompleted] = useState(0);
+  const [correctAnswers, setCorrectAnswers] = useState(0);
+  const [incorrectAnswers, setIncorrectAnswers] = useState(0);
+  const [missedCards, setMissedCards] = useState([]);
+
+  const [reviewFilter, setReviewFilter] = useState("all");
+  const [sessionSize, setSessionSize] = useState(null);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadCards = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const params = {};
+
+      if (location.state?.subject) {
+        params.subject = location.state.subject;
+      }
+
+      if (location.state?.chapter) {
+        params.chapter = location.state.chapter;
+      }
+
+      const { data } = await client.get(
+        "/review/due",
+        { params }
+      );
+
+      const dueCards = Array.isArray(data)
+        ? data
+        : [];
+
+      setAllDueCards(dueCards);
+      setCards([]);
+      setSessionTotal(0);
+      setCompleted(0);
+      setCorrectAnswers(0);
+      setIncorrectAnswers(0);
+      setSessionSize(null);
+
+    } catch (err) {
+      console.error(
+        "Failed to load review cards:",
+        err
+      );
+
+      setError(
+        err.response?.data?.error ||
+        "Unable to load your review cards."
+      );
+
+      setAllDueCards([]);
+      setCards([]);
+
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCards();
+  }, [
+    location.state?.subject,
+    location.state?.chapter,
+  ]);
+
+  const availableCards = useMemo(() => {
+    if (reviewFilter === "all") {
+      return allDueCards;
+    }
+
+    if (reviewFilter === "weak") {
+      return allDueCards.filter(
+        (card) => Number(card.p_l ?? 0) < 0.4
+      );
+    }
+
+    if (reviewFilter === "missed") {
+      return allDueCards.filter((card) => {
+        const history = card.reviewHistory || [];
+
+        if (history.length === 0) {
+          return false;
+        }
+
+        const lastReview =
+          history[history.length - 1];
+
+        return lastReview.correct === false;
+      });
+    }
+
+    return allDueCards;
+  }, [allDueCards, reviewFilter]);
+
+  const handleFilterChange = (filter) => {
+    setReviewFilter(filter);
+
+    setCards([]);
+    setSessionTotal(0);
+    setCompleted(0);
+    setCorrectAnswers(0);
+    setIncorrectAnswers(0);
+    setMissedCards([]);
+    setSessionSize(null);
+  };
+
+  const startSession = (size) => {
+    if (availableCards.length === 0) {
+      return;
+    }
+
+    const selectedCards =
+      size === "all"
+        ? availableCards
+        : availableCards.slice(0, size);
+
+    setCards(selectedCards);
+    setSessionTotal(selectedCards.length);
+    setCompleted(0);
+    setSessionSize(size);
+  };
+
+  const resetSession = () => {
+    setCards([]);
+    setSessionTotal(0);
+    setCompleted(0);
+    setCorrectAnswers(0);
+    setIncorrectAnswers(0);
+    setMissedCards([]);
+    setSessionSize(null);
+  };
+
+  const handleDone = (correct) => {
+    setCompleted((current) => current + 1);
+
+    if (correct) {
+      setCorrectAnswers((current) => current + 1);
+    } else {
+      setIncorrectAnswers((current) => current + 1);
+
+      setMissedCards((current) => [
+        ...current,
+        cards[0],
+      ]);
+    }
+
+    setCards((current) => current.slice(1));
+  };
+
+  if (loading) {
+    return (
+      <div className="page review-page">
+        <div className="review-loading-card">
+          <div className="review-spinner" />
+          <h2>Preparing your review</h2>
+          <p>Getting your cards ready...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="page review-page">
+        <div className="review-error">
+          <div className="review-error-icon">!</div>
+
+          <p className="eyebrow">REVIEW</p>
+
+          <h1>Something went wrong</h1>
+
+          <p className="subtitle">
+            {error}
+          </p>
+
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={loadCards}
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (sessionSize === null) {
+    return (
+      <div className="page review-page">
+
+        <section className="review-session-header">
+          <div>
+            <p className="eyebrow">
+              DAILY REVIEW
+            </p>
+
+            <h1>
+              Choose your session
+            </h1>
+
+            <p>
+              You have{" "}
+              <strong>
+                {allDueCards.length}
+              </strong>{" "}
+              cards due.
+            </p>
+          </div>
+
+          <div className="review-session-score">
+            <strong>
+              {allDueCards.length}
+            </strong>
+
+            <span>
+              due
+            </span>
+          </div>
+        </section>
+
+        <section className="review-filter-card">
+
+          <div className="review-filter-heading">
+            <span className="eyebrow">
+              REVIEW FILTER
+            </span>
+
+            <h2>
+              What do you want to practice?
+            </h2>
+
+            <p>
+              {reviewFilter === "all"
+                ? `${availableCards.length} cards available`
+                : `${availableCards.length} cards match this filter`}
+            </p>
+          </div>
+
+          <div className="review-filter-options">
+
+            <button
+              type="button"
+              className={`review-filter-option ${
+                reviewFilter === "all"
+                  ? "active"
+                  : ""
+              }`}
+              onClick={() =>
+                handleFilterChange("all")
+              }
+            >
+              <strong>
+                All due
+              </strong>
+
+              <span>
+                {allDueCards.length} cards waiting
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className={`review-filter-option ${
+                reviewFilter === "weak"
+                  ? "active"
+                  : ""
+              }`}
+              onClick={() =>
+                handleFilterChange("weak")
+              }
+            >
+              <strong>
+                🔥 Weak cards
+              </strong>
+
+              <span>
+                {allDueCards.filter(
+                  (card) =>
+                    Number(card.p_l ?? 0) < 0.4
+                ).length}{" "}
+                cards with low mastery
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className={`review-filter-option ${
+                reviewFilter === "missed"
+                  ? "active"
+                  : ""
+              }`}
+              onClick={() =>
+                handleFilterChange("missed")
+              }
+            >
+              <strong>
+                ↩ Recently missed
+              </strong>
+
+              <span>
+                {allDueCards.filter((card) => {
+                  const history =
+                    card.reviewHistory || [];
+
+                  if (history.length === 0) {
+                    return false;
+                  }
+
+                  return (
+                    history[
+                      history.length - 1
+                    ].correct === false
+                  );
+                }).length}{" "}
+                cards missed last time
+              </span>
+            </button>
+
+          </div>
+
+        </section>
+
+        {availableCards.length === 0 ? (
+          <section className="review-no-filter-results">
+
+            <div className="review-complete-icon">
+              ✓
+            </div>
+
+            <p className="eyebrow">
+              NO MATCHING CARDS
+            </p>
+
+            <h2>
+              Nothing to review here
+            </h2>
+
+            <p>
+              {reviewFilter === "weak"
+                ? "You currently have no weak cards due for review."
+                : reviewFilter === "missed"
+                  ? "You currently have no recently missed cards due for review."
+                  : "You currently have no cards due for review."}
+            </p>
+
+            {reviewFilter !== "all" && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() =>
+                  handleFilterChange("all")
+                }
+              >
+                Show All Due
+              </button>
+            )}
+
+          </section>
+        ) : (
+          <section className="review-session-choice-card">
+
+            <div className="review-session-choice-heading">
+
+              <span className="eyebrow">
+                SESSION SIZE
+              </span>
+
+              <h2>
+                How many cards do you want to review?
+              </h2>
+
+              <p>
+                We'll start with the cards that need the most attention.
+              </p>
+
+            </div>
+
+            <div className="review-session-options">
+
+              {SESSION_OPTIONS.map((size) => {
+
+                const available =
+                  Math.min(
+                    size,
+                    availableCards.length
+                  );
+
+                return (
+                  <button
+                    type="button"
+                    key={size}
+                    className="review-session-option"
+                    onClick={() =>
+                      startSession(size)
+                    }
+                    disabled={available === 0}
+                  >
+                    <strong>
+                      {available}
+                    </strong>
+
+                    <span>
+                      {available === 1
+                        ? "card"
+                        : "cards"}
+                    </span>
+
+                    <small>
+                      {availableCards.length <= size
+                        ? "Review all available"
+                        : `Up to ${size} cards`}
+                    </small>
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                className="review-session-option review-session-option-all"
+                onClick={() =>
+                  startSession("all")
+                }
+              >
+                <strong>
+                  {availableCards.length}
+                </strong>
+
+                <span>
+                  {availableCards.length === 1
+                    ? "card"
+                    : "cards"}
+                </span>
+
+                <small>
+                  Review everything available
+                </small>
+              </button>
+
+            </div>
+
+            <div className="review-session-choice-tip">
+
+              <span>
+                🎯
+              </span>
+
+              <p>
+                Smart Review puts weaker cards first.
+              </p>
+
+            </div>
+
+          </section>
+        )}
+
+      </div>
+    );
+  }
+
+  if (cards.length === 0) {
+    return (
+      <div className="page review-page">
+
+        <div className="review-complete">
+
+          <div className="review-complete-icon">
+            ✓
+          </div>
+
+          <p className="eyebrow">
+            SESSION COMPLETE
+          </p>
+
+          <h1 className="brand">
+            Nice work!
+          </h1>
+
+          <p className="subtitle">
+            You completed your selected review session.
+          </p>
+
+          <div className="review-results">
+
+            <div className="review-result review-result-correct">
+              <strong>
+                {correctAnswers}
+              </strong>
+
+              <span>
+                Correct
+              </span>
+            </div>
+
+            <div className="review-result review-result-wrong">
+              <strong>
+                {incorrectAnswers}
+              </strong>
+
+              <span>
+                Incorrect
+              </span>
+            </div>
+
+            <div className="review-result">
+              <strong>
+                {sessionTotal}
+              </strong>
+
+              <span>
+                Total cards
+              </span>
+            </div>
+
+            <div className="review-result">
+              <strong>
+                {sessionTotal > 0
+                  ? Math.round(
+                      (correctAnswers / sessionTotal) * 100
+                    )
+                  : 0}%
+              </strong>
+
+              <span>
+                Accuracy
+              </span>
+            </div>
+
+          </div>
+
+          <div className="review-complete-message">
+            <span>
+              {missedCards.length > 0 ? "🎯" : "🔥"}
+            </span>
+
+            <p>
+              {missedCards.length > 0
+                ? `${missedCards.length} card${missedCards.length === 1 ? "" : "s"} need more practice. Review them again while they're fresh.`
+                : "Excellent! You got every card correct in this session."}
+            </p>
+          </div>
+
+          <div className="review-actions">
+
+            {missedCards.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setCards(missedCards);
+                  setSessionTotal(missedCards.length);
+                  setCompleted(0);
+                  setCorrectAnswers(0);
+                  setIncorrectAnswers(0);
+                  setMissedCards([]);
+                  setSessionSize("missed");
+                }}
+              >
+                Review Missed Cards
+              </button>
+            )}
+
+            <button
+              type="button"
+              className={
+                missedCards.length > 0
+                  ? "review-home-button"
+                  : "btn btn-primary"
+              }
+              onClick={resetSession}
+            >
+              Choose Another Session
+            </button>
+
+            <Link
+              to="/progress"
+              className="review-home-button"
+            >
+              View Progress
+            </Link>
+
+          </div>
+
+        </div>
+
+      </div>
+    );
+  }
+
+  const currentCard = cards[0];
+
+  const remaining = cards.length;
+
+  const progress =
+    Math.round(
+      (completed / sessionTotal) * 100
+    );
+
+  return (
+    <div className="page review-page">
+
+      <section className="review-session-header">
+
+        <div>
+          <p className="eyebrow">
+            DAILY REVIEW
+          </p>
+
+          <h1>
+            Keep learning
+          </h1>
+
+          <p>
+            Strengthen what you already know.
+          </p>
+        </div>
+
+        <div className="review-session-score">
+
+          <strong>
+            {completed}
+          </strong>
+
+          <span>
+            / {sessionTotal}
+          </span>
+
+        </div>
+
+      </section>
+
+      {(location.state?.subject || location.state?.chapter) && (
+        <div className="review-context">
+          <span className="review-context-label">
+            STUDYING
+          </span>
+
+          <strong>
+            {location.state?.subject || "Subject"}
+            {location.state?.chapter
+              ? ` · ${location.state.chapter}`
+              : ""}
+          </strong>
+        </div>
+      )}
+
+      <section className="review-progress-card">
+
+        <div className="review-progress-top">
+          <span>
+            Session progress
+          </span>
+
+          <strong>
+            {progress}%
+          </strong>
+        </div>
+
+        <div className="review-progress">
+
+          <div
+            className="review-progress-fill"
+            style={{
+              width: `${progress}%`,
+            }}
+          />
+
+        </div>
+
+        <div className="review-progress-bottom">
+
+          <span>
+            {completed} completed
+          </span>
+
+          <span>
+            {remaining} remaining
+          </span>
+
+        </div>
+
+      </section>
+
+      <div className="review-instruction">
+
+        <span className="review-instruction-icon">
+          💡
+        </span>
+
+        <div>
+          <strong>
+            Think before you reveal
+          </strong>
+
+          <p>
+            Try to remember the answer before tapping the card.
+          </p>
+        </div>
+
+      </div>
+
+      <div className="review-priority-badge">
+
+        <span>
+          🎯
+        </span>
+
+        <strong>
+          {currentCard.priorityReason ||
+            "Due for review"}
+        </strong>
+
+      </div>
+
+      <div className="review-card-container">
+
+        <Flashcard
+          key={currentCard._id}
+          card={currentCard}
+          onDone={handleDone}
+        />
+
+      </div>
+
+      <p className="review-hint">
+        Your answers help MemoryMesh decide when you should see this card again.
+      </p>
+
+    </div>
+  );
+}
+
+
+
+

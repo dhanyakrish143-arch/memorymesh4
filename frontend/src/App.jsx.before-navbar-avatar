@@ -1,0 +1,268 @@
+﻿import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  Link,
+  useLocation,
+} from "react-router-dom";
+
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+
+import Login from "./pages/Login";
+import Home from "./pages/Home";
+import Learn from "./pages/Learn";
+import Upload from "./pages/Upload";
+import Progress from "./pages/Progress";
+import Cards from "./pages/Cards";
+import Activity from "./pages/Activity";
+import Achievements from "./pages/Achievements";
+import Review from "./pages/Review";
+import Quiz from "./pages/Quiz";
+import Profile from "./pages/Profile";
+import QuizHistory from "./pages/QuizHistory";
+
+function Private({ children }) {
+  const { user } = useAuth();
+
+  return user ? children : <Navigate to="/login" />;
+}
+
+function Nav() {
+  const { user, logout } = useAuth();
+  const location = useLocation();
+
+  if (!user) return null;
+
+  return (
+    <div className="nav">
+      <span className="nav-brand">MemoryMesh</span>
+
+      <Link
+        to="/"
+        className={location.pathname === "/" ? "active" : ""}
+      >
+        Home
+      </Link>
+
+      <Link
+        to="/learn"
+        className={location.pathname === "/learn" ? "active" : ""}
+      >
+        Learn
+      </Link>
+
+      <Link
+        to="/upload"
+        className={location.pathname === "/upload" ? "active" : ""}
+      >
+        Upload
+      </Link>
+
+      <Link
+        to="/cards"
+        className={location.pathname === "/cards" ? "active" : ""}
+      >
+        Flashcards
+      </Link>
+
+      <Link
+        to="/progress"
+        className={location.pathname === "/progress" ? "active" : ""}
+      >
+        Progress
+      </Link>
+
+      <Link
+        to="/review"
+        className={location.pathname === "/review" ? "active" : ""}
+      >
+        Review
+      </Link>
+
+      <Link
+        to="/quiz"
+        className={location.pathname === "/quiz" ? "active" : ""}
+      >
+        Quiz
+      </Link>
+
+      <Link
+        to="/quiz-history"
+        className={
+          location.pathname === "/quiz-history"
+            ? "active"
+            : ""
+        }
+      >
+        Quiz History
+      </Link>
+
+      <Link
+        to="/activity"
+        className={location.pathname === "/activity" ? "active" : ""}
+      >
+        Activity
+      </Link>
+
+      <Link
+        to="/profile"
+        className={
+          location.pathname === "/profile"
+            ? "active"
+            : ""
+        }
+      >
+        Profile
+      </Link>
+      <Link
+        to="/achievements"
+        className={
+          location.pathname === "/achievements"
+            ? "active"
+            : ""
+        }
+      >
+        Achievements
+      </Link>
+
+      <div className="nav-spacer" />
+
+      <span className="nav-user">
+        {user.name || user.email}
+      </span>
+
+      <button
+        type="button"
+        className="nav-logout"
+        onClick={logout}
+      >
+        Logout
+      </button>
+    </div>
+  );
+}
+
+function AppRoutes() {
+  return (
+    <>
+      <Nav />
+
+      <Routes>
+        <Route
+          path="/quiz-history"
+          element={
+            <Private>
+              <QuizHistory />
+            </Private>
+          }
+        />
+        <Route path="/login" element={<Login />} />
+
+        <Route
+          path="/"
+          element={
+            <Private>
+              <Home />
+            </Private>
+          }
+        />
+
+        <Route
+          path="/learn"
+          element={
+            <Private>
+              <Learn />
+            </Private>
+          }
+        />
+
+        <Route
+          path="/upload"
+          element={
+            <Private>
+              <Upload />
+            </Private>
+          }
+        />
+
+        <Route
+          path="/progress"
+          element={
+            <Private>
+              <Progress />
+            </Private>
+          }
+        />
+
+        <Route
+          path="/cards"
+          element={
+            <Private>
+              <Cards />
+            </Private>
+          }
+        />
+
+        <Route
+          path="/activity"
+          element={
+            <Private>
+              <Activity />
+            </Private>
+          }
+        />
+
+        <Route
+          path="/profile"
+          element={
+            <Private>
+              <Profile />
+            </Private>
+          }
+        />
+        <Route
+          path="/achievements"
+          element={
+            <Private>
+              <Achievements />
+            </Private>
+          }
+        />
+
+        <Route
+          path="/review"
+          element={
+            <Private>
+              <Review />
+            </Private>
+          }
+        />
+        <Route
+          path="/quiz"
+          element={
+            <Private>
+              <Quiz />
+            </Private>
+          }
+        />
+      </Routes>
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}
+
+
+
+
+
+

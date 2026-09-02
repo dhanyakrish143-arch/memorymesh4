@@ -1,0 +1,470 @@
+﻿import { useEffect, useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import client from "../api/client";
+
+const QUICK_PROMPTS = [
+  "Explain this topic in simple words.",
+  "What are the most important things to remember?",
+  "Give me a simple example.",
+  "Quiz me on this topic.",
+];
+
+export default function StudyAssistant() {
+  const [cards, setCards] = useState([]);
+  const [notes, setNotes] = useState([]);
+
+  const [subject, setSubject] = useState("");
+  const [chapter, setChapter] = useState("");
+
+  const [question, setQuestion] = useState("");
+  const [messages, setMessages] = useState([]);
+
+  const [loading, setLoading] = useState(true);
+  const [asking, setAsking] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const loadStudyMaterial = async () => {
+      try {
+        const [cardsResponse, notesResponse] =
+          await Promise.all([
+            client.get("/cards"),
+            client.get("/notes"),
+          ]);
+
+        const cardData = Array.isArray(cardsResponse.data)
+          ? cardsResponse.data
+          : cardsResponse.data?.cards || [];
+
+        const noteData = Array.isArray(notesResponse.data)
+          ? notesResponse.data
+          : notesResponse.data?.notes || [];
+
+        setCards(cardData);
+        setNotes(noteData);
+      } catch (err) {
+        console.error(
+          "Failed to load TutorAgent material:",
+          err
+        );
+
+        setError(
+          "Unable to load your study material."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadStudyMaterial();
+  }, []);
+
+  const subjects = useMemo(() => {
+    const values = [
+      ...cards.map((card) => card.subject),
+      ...notes.map((note) => note.subject),
+    ]
+      .map((value) => value?.trim())
+      .filter(Boolean);
+
+    return [...new Set(values)].sort();
+  }, [cards, notes]);
+
+  const chapters = useMemo(() => {
+    if (!subject) return [];
+
+    const subjectKey = subject.toLowerCase();
+
+    const values = [
+      ...cards
+        .filter(
+          (card) =>
+            card.subject?.trim().toLowerCase() ===
+            subjectKey
+        )
+        .map((card) => card.chapter),
+
+      ...notes
+        .filter(
+          (note) =>
+            note.subject?.trim().toLowerCase() ===
+            subjectKey
+        )
+        .map((note) => note.chapter),
+    ]
+      .map((value) => value?.trim())
+      .filter(Boolean);
+
+    return [...new Set(values)].sort();
+  }, [cards, notes, subject]);
+
+  const askQuestion = async (e) => {
+    e.preventDefault();
+
+    const trimmed = question.trim();
+
+    if (!trimmed || asking) {
+      return;
+    }
+
+    setAsking(true);
+    setError("");
+
+    const nextHistory = [
+      ...messages,
+      {
+        role: "user",
+        content: trimmed,
+      },
+    ];
+
+    setMessages(nextHistory);
+    setQuestion("");
+
+    try {
+      const { data } = await client.post(
+        "/assistant/ask",
+        {
+          question: trimmed,
+          subject: subject || undefined,
+          chapter: chapter || undefined,
+          history: messages.slice(-10),
+        }
+      );
+
+      setMessages((current) => [
+        ...current,
+        {
+          role: "assistant",
+          content:
+            data.answer ||
+            "I couldn't generate an answer.",
+        },
+      ]);
+    } catch (err) {
+      console.error(
+        "TutorAgent request failed:",
+        err
+      );
+
+      setError(
+        err.response?.data?.error ||
+        "TutorAgent failed. Please try again."
+      );
+
+      setMessages((current) => {
+        const next = [...current];
+        next.pop();
+        return next;
+      });
+    } finally {
+      setAsking(false);
+    }
+  };
+
+  const useQuickPrompt = (prompt) => {
+    setQuestion(prompt);
+  };
+
+  const startNewChat = () => {
+    setMessages([]);
+    setQuestion("");
+    setError("");
+  };
+
+  if (loading) {
+    return (
+      <div className="page tutor-page">
+        <div className="progress-loading">
+          <div className="loader" />
+          <p>Preparing your TutorAgent...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page tutor-page">
+
+      <section className="tutor-hero">
+
+        <div>
+          <span className="eyebrow">
+            MEMORYMESH AI
+          </span>
+
+          <h1>
+            Meet your TutorAgent
+          </h1>
+
+          <p>
+            Ask doubts, simplify difficult ideas, and learn
+            directly from your study material.
+          </p>
+        </div>
+
+        <div className="tutor-hero-icon">
+          🤖
+        </div>
+
+      </section>
+
+      <section className="card tutor-context">
+
+        <div className="tutor-context-title">
+
+          <div>
+            <span className="eyebrow">
+              STUDY CONTEXT
+            </span>
+
+            <h2>
+              What are you studying?
+            </h2>
+          </div>
+
+          {messages.length > 0 && (
+            <button
+              type="button"
+              className="tutor-new-chat"
+              onClick={startNewChat}
+            >
+              + New chat
+            </button>
+          )}
+
+        </div>
+
+        <div className="tutor-select-grid">
+
+          <label>
+            <span>Subject</span>
+
+            <select
+              value={subject}
+              onChange={(e) => {
+                setSubject(e.target.value);
+                setChapter("");
+              }}
+            >
+              <option value="">
+                All subjects
+              </option>
+
+              {subjects.map((item) => (
+                <option
+                  key={item}
+                  value={item}
+                >
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Chapter</span>
+
+            <select
+              value={chapter}
+              onChange={(e) =>
+                setChapter(e.target.value)
+              }
+              disabled={!subject}
+            >
+              <option value="">
+                All chapters
+              </option>
+
+              {chapters.map((item) => (
+                <option
+                  key={item}
+                  value={item}
+                >
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+
+        </div>
+
+      </section>
+
+      <section className="tutor-chat">
+
+        {messages.length === 0 ? (
+          <div className="tutor-welcome">
+
+            <div className="tutor-welcome-icon">
+              ✦
+            </div>
+
+            <span className="eyebrow">
+              YOUR AI TUTOR
+            </span>
+
+            <h2>
+              What would you like to understand?
+            </h2>
+
+            <p>
+              Ask a question about your selected subject or
+              chapter. TutorAgent will use your MemoryMesh
+              notes and flashcards as context.
+            </p>
+
+            <div className="tutor-quick-grid">
+
+              {QUICK_PROMPTS.map((prompt) => (
+                <button
+                  type="button"
+                  key={prompt}
+                  onClick={() =>
+                    useQuickPrompt(prompt)
+                  }
+                >
+                  {prompt}
+                </button>
+              ))}
+
+            </div>
+
+          </div>
+        ) : (
+          <div className="tutor-messages">
+
+            {messages.map((message, index) => (
+              <div
+                key={index}
+                className={
+                  message.role === "user"
+                    ? "tutor-message tutor-message-user"
+                    : "tutor-message tutor-message-ai"
+                }
+              >
+
+                <span className="tutor-message-label">
+                  {message.role === "user"
+                    ? "YOU"
+                    : "TUTORAGENT"}
+                </span>
+
+                <div className="tutor-message-body">
+
+                  {message.role === "assistant" ? (
+                    <ReactMarkdown
+                      components={{
+                        h1: ({ children }) => (
+                          <h3>{children}</h3>
+                        ),
+                        h2: ({ children }) => (
+                          <h3>{children}</h3>
+                        ),
+                        h3: ({ children }) => (
+                          <h4>{children}</h4>
+                        ),
+                        p: ({ children }) => (
+                          <p>{children}</p>
+                        ),
+                        ul: ({ children }) => (
+                          <ul>{children}</ul>
+                        ),
+                        ol: ({ children }) => (
+                          <ol>{children}</ol>
+                        ),
+                      }}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
+                  ) : (
+                    message.content
+                  )}
+
+                </div>
+
+              </div>
+            ))}
+
+            {asking && (
+              <div className="tutor-message tutor-message-ai">
+
+                <span className="tutor-message-label">
+                  TUTORAGENT
+                </span>
+
+                <div className="tutor-thinking">
+
+                  <span />
+                  <span />
+                  <span />
+
+                  <strong>
+                    TutorAgent is thinking...
+                  </strong>
+
+                </div>
+
+              </div>
+            )}
+
+          </div>
+        )}
+
+        {error && (
+          <div className="tutor-error">
+            {error}
+          </div>
+        )}
+
+        <form
+          className="tutor-input"
+          onSubmit={askQuestion}
+        >
+
+          <textarea
+            value={question}
+            onChange={(e) =>
+              setQuestion(e.target.value)
+            }
+            placeholder={
+              chapter
+                ? `Ask about ${chapter}...`
+                : subject
+                  ? `Ask about ${subject}...`
+                  : "Ask TutorAgent a question..."
+            }
+            rows={3}
+            disabled={asking}
+          />
+
+          <div className="tutor-input-footer">
+
+            <span>
+              {subject
+                ? `${subject}${chapter ? ` · ${chapter}` : ""}`
+                : "All study material"}
+            </span>
+
+            <button
+              type="submit"
+              className="primary-button"
+              disabled={
+                !question.trim() ||
+                asking
+              }
+            >
+              {asking
+                ? "Thinking..."
+                : "Ask TutorAgent →"}
+            </button>
+
+          </div>
+
+        </form>
+
+      </section>
+
+    </div>
+  );
+}

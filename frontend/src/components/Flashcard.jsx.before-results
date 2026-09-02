@@ -1,0 +1,107 @@
+﻿import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import client from "../api/client";
+
+export default function Flashcard({ card, onDone }) {
+  const [flipped, setFlipped] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const revealAnswer = () => {
+    if (!submitting) {
+      setFlipped(true);
+    }
+  };
+
+  const submit = async (correct) => {
+    if (submitting) return;
+
+    try {
+      setSubmitting(true);
+
+      await client.post("/review/submit", {
+        cardId: card._id,
+        correct,
+      });
+
+      onDone();
+    } catch (err) {
+      console.error("Failed to submit review:", err);
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="flashcard-review">
+      <motion.button
+        type="button"
+        className="flashcard-main"
+        onClick={revealAnswer}
+        whileHover={{ y: -3 }}
+        whileTap={{ scale: 0.99 }}
+        disabled={flipped || submitting}
+      >
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={flipped ? "answer" : "question"}
+            className="flashcard-face"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18 }}
+          >
+            <span className="flashcard-label">
+              {flipped ? "ANSWER" : "QUESTION"}
+            </span>
+
+            <span className="flashcard-text">
+              {flipped ? card.answer : card.question}
+            </span>
+
+            <span className="flashcard-tap">
+              {flipped
+                ? "How well did you remember it?"
+                : "Tap to reveal the answer"}
+            </span>
+          </motion.div>
+        </AnimatePresence>
+      </motion.button>
+
+      {flipped && (
+        <motion.div
+          className="flashcard-actions"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <button
+            type="button"
+            className="review-choice review-choice-wrong"
+            disabled={submitting}
+            onClick={() => submit(false)}
+          >
+            <span className="review-choice-icon">×</span>
+
+            <span>
+              <strong>Still learning</strong>
+              <small>I need more practice</small>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className="review-choice review-choice-right"
+            disabled={submitting}
+            onClick={() => submit(true)}
+          >
+            <span className="review-choice-icon">✓</span>
+
+            <span>
+              <strong>Got it</strong>
+              <small>I remembered this</small>
+            </span>
+          </button>
+        </motion.div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,379 @@
+﻿import { useEffect, useMemo, useState } from "react";
+import client from "../api/client";
+
+export default function StudyAssistant() {
+  const [cards, setCards] = useState([]);
+  const [notes, setNotes] = useState([]);
+
+  const [subject, setSubject] = useState("");
+  const [chapter, setChapter] = useState("");
+
+  const [question, setQuestion] = useState("");
+  const [messages, setMessages] = useState([]);
+
+  const [loading, setLoading] = useState(true);
+  const [asking, setAsking] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const loadStudyMaterial = async () => {
+      try {
+        setLoading(true);
+
+        const [cardsResponse, notesResponse] =
+          await Promise.all([
+            client.get("/cards"),
+            client.get("/notes"),
+          ]);
+
+        const cardData = Array.isArray(cardsResponse.data)
+          ? cardsResponse.data
+          : cardsResponse.data?.cards || [];
+
+        const noteData = Array.isArray(notesResponse.data)
+          ? notesResponse.data
+          : notesResponse.data?.notes || [];
+
+        setCards(cardData);
+        setNotes(noteData);
+      } catch (err) {
+        console.error(
+          "Failed to load Study Assistant material:",
+          err
+        );
+
+        setError(
+          "Unable to load your study material."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadStudyMaterial();
+  }, []);
+
+  const subjects = useMemo(() => {
+    const values = [
+      ...cards.map((card) => card.subject),
+      ...notes.map((note) => note.subject),
+    ]
+      .map((value) => value?.trim())
+      .filter(Boolean);
+
+    return [...new Set(values)].sort();
+  }, [cards, notes]);
+
+  const chapters = useMemo(() => {
+    if (!subject) return [];
+
+    const subjectKey = subject.toLowerCase();
+
+    const values = [
+      ...cards
+        .filter(
+          (card) =>
+            card.subject?.trim().toLowerCase() === subjectKey
+        )
+        .map((card) => card.chapter),
+
+      ...notes
+        .filter(
+          (note) =>
+            note.subject?.trim().toLowerCase() === subjectKey
+        )
+        .map((note) => note.chapter),
+    ]
+      .map((value) => value?.trim())
+      .filter(Boolean);
+
+    return [...new Set(values)].sort();
+  }, [cards, notes, subject]);
+
+  const askQuestion = async (e) => {
+    e.preventDefault();
+
+    const trimmed = question.trim();
+
+    if (!trimmed || asking) {
+      return;
+    }
+
+    setAsking(true);
+    setError("");
+
+    const userMessage = {
+      role: "user",
+      content: trimmed,
+    };
+
+    setMessages((current) => [
+      ...current,
+      userMessage,
+    ]);
+
+    setQuestion("");
+
+    try {
+      const { data } = await client.post(
+        "/assistant/ask",
+        {
+          question: trimmed,
+          subject: subject || undefined,
+          chapter: chapter || undefined,
+        }
+      );
+
+      setMessages((current) => [
+        ...current,
+        {
+          role: "assistant",
+          content:
+            data.answer ||
+            "I couldn't generate an answer.",
+        },
+      ]);
+    } catch (err) {
+      console.error(
+        "Study Assistant request failed:",
+        err
+      );
+
+      setError(
+        err.response?.data?.error ||
+        "Study Assistant failed. Please try again."
+      );
+
+      setMessages((current) => {
+        const next = [...current];
+        next.pop();
+        return next;
+      });
+    } finally {
+      setAsking(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="page assistant-page">
+        <div className="progress-loading">
+          <div className="loader" />
+          <p>Preparing your Study Assistant...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page assistant-page">
+
+      <section className="assistant-hero">
+        <div>
+          <span className="eyebrow">
+            MEMORYMESH AI
+          </span>
+
+          <h1 className="brand">
+            Study Assistant
+          </h1>
+
+          <p className="subtitle">
+            Ask questions about what you're studying and get
+            explanations based on your learning material.
+          </p>
+        </div>
+
+        <div className="assistant-hero-icon">
+          ✦
+        </div>
+      </section>
+
+      <section className="card assistant-context-card">
+
+        <div className="assistant-context-heading">
+          <span className="eyebrow">
+            STUDY CONTEXT
+          </span>
+
+          <h2>
+            What are you studying?
+          </h2>
+        </div>
+
+        <div className="assistant-select-row">
+
+          <label>
+            <span>Subject</span>
+
+            <select
+              value={subject}
+              onChange={(e) => {
+                setSubject(e.target.value);
+                setChapter("");
+              }}
+            >
+              <option value="">
+                All subjects
+              </option>
+
+              {subjects.map((item) => (
+                <option
+                  key={item}
+                  value={item}
+                >
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Chapter</span>
+
+            <select
+              value={chapter}
+              onChange={(e) =>
+                setChapter(e.target.value)
+              }
+              disabled={!subject}
+            >
+              <option value="">
+                All chapters
+              </option>
+
+              {chapters.map((item) => (
+                <option
+                  key={item}
+                  value={item}
+                >
+                  {item}
+                </option>
+              ))}
+            </select>
+          </label>
+
+        </div>
+
+      </section>
+
+      <section className="assistant-chat-card">
+
+        {messages.length === 0 ? (
+          <div className="assistant-empty">
+
+            <div className="assistant-empty-icon">
+              💡
+            </div>
+
+            <h2>
+              What do you want to understand?
+            </h2>
+
+            <p>
+              Ask me to explain a concept, clarify a question,
+              or help you understand your study material.
+            </p>
+
+            <div className="assistant-suggestions">
+
+              {[
+                "Explain this chapter in simple words.",
+                "Give me an example of the main concept.",
+                "What are the most important things to remember?",
+              ].map((suggestion) => (
+                <button
+                  type="button"
+                  key={suggestion}
+                  onClick={() =>
+                    setQuestion(suggestion)
+                  }
+                >
+                  {suggestion}
+                </button>
+              ))}
+
+            </div>
+
+          </div>
+        ) : (
+          <div className="assistant-messages">
+
+            {messages.map((message, index) => (
+              <div
+                className={`assistant-message ${
+                  message.role === "user"
+                    ? "assistant-message-user"
+                    : "assistant-message-ai"
+                }`}
+                key={index}
+              >
+                <span className="assistant-message-label">
+                  {message.role === "user"
+                    ? "YOU"
+                    : "MEMORYMESH AI"}
+                </span>
+
+                <div className="assistant-message-content">
+                  {message.content}
+                </div>
+              </div>
+            ))}
+
+            {asking && (
+              <div className="assistant-message assistant-message-ai">
+                <span className="assistant-message-label">
+                  MEMORYMESH AI
+                </span>
+
+                <div className="assistant-typing">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              </div>
+            )}
+
+          </div>
+        )}
+
+        {error && (
+          <div className="assistant-error">
+            {error}
+          </div>
+        )}
+
+        <form
+          className="assistant-input-area"
+          onSubmit={askQuestion}
+        >
+          <textarea
+            value={question}
+            onChange={(e) =>
+              setQuestion(e.target.value)
+            }
+            placeholder={
+              subject
+                ? `Ask about ${chapter || subject}...`
+                : "Ask a study question..."
+            }
+            rows={3}
+            disabled={asking}
+          />
+
+          <button
+            type="submit"
+            className="primary-button"
+            disabled={
+              !question.trim() || asking
+            }
+          >
+            {asking ? "Thinking..." : "Ask AI →"}
+          </button>
+        </form>
+
+      </section>
+
+    </div>
+  );
+}
