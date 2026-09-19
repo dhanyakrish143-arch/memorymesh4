@@ -1,28 +1,52 @@
 ﻿import express from "express";
 import Textbook from "../models/Textbook.js";
-import requireAuth from "../middleware/auth.js";
 
 const router = express.Router();
 
-router.use(requireAuth);
+/*
+  Examples:
+
+  /api/textbooks?class=10
+  /api/textbooks?class=10&subject=Mathematics
+  /api/textbooks?class=10&subject=Mathematics&language=English
+  /api/textbooks?class=10&language=Hindi
+*/
 
 router.get("/", async (req, res) => {
   try {
-    const classNumber =
-      Number(req.query.class);
+    const rawClass =
+      req.query.class ??
+      req.query.classNumber;
+
+    const subject =
+      typeof req.query.subject === "string"
+        ? req.query.subject.trim()
+        : "";
+
+    const language =
+      typeof req.query.language === "string"
+        ? req.query.language.trim()
+        : "";
+
+    let classNumber = null;
+
+    if (rawClass !== undefined) {
+      const match = String(rawClass).match(/\d+/);
+
+      if (match) {
+        classNumber = Number(match[0]);
+      }
+    }
 
     if (
       !Number.isInteger(classNumber) ||
-      classNumber < 1 ||
+      classNumber < 5 ||
       classNumber > 12
     ) {
       return res.status(400).json({
-        error: "Valid class is required.",
+        error: "class must be an integer from 5 to 12.",
       });
     }
-
-    const subject =
-      req.query.subject?.trim();
 
     const filter = {
       classNumber,
@@ -30,33 +54,49 @@ router.get("/", async (req, res) => {
     };
 
     if (subject) {
-      filter.subject = subject;
+      filter.subject = new RegExp(
+        `^${escapeRegExp(subject)}$`,
+        "i"
+      );
     }
 
-    const textbooks =
-      await Textbook.find(filter)
-        .sort({
-          subject: 1,
-          chapterNumber: 1,
-          title: 1,
-        })
-        .lean();
+    if (language) {
+      filter.language = new RegExp(
+        `^${escapeRegExp(language)}$`,
+        "i"
+      );
+    }
+
+    const textbooks = await Textbook.find(filter)
+      .sort({
+        subject: 1,
+        language: 1,
+        bookCode: 1,
+        chapterNumber: 1,
+      })
+      .lean();
 
     res.json({
       success: true,
       classNumber,
+      subject: subject || null,
+      language: language || null,
       textbooks,
     });
   } catch (error) {
-    console.error(
-      "Textbook fetch error:",
-      error
-    );
+    console.error("Textbook fetch error:", error);
 
     res.status(500).json({
       error: "Failed to load textbooks.",
     });
   }
 });
+
+function escapeRegExp(value) {
+  return value.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  );
+}
 
 export default router;

@@ -5,6 +5,8 @@ const textbookSchema = new mongoose.Schema(
     classNumber: {
       type: Number,
       required: true,
+      min: 5,
+      max: 12,
       index: true,
     },
 
@@ -17,8 +19,10 @@ const textbookSchema = new mongoose.Schema(
 
     language: {
       type: String,
-      default: "English",
+      required: true,
       trim: true,
+      default: "English",
+      index: true,
     },
 
     title: {
@@ -27,15 +31,23 @@ const textbookSchema = new mongoose.Schema(
       trim: true,
     },
 
-    chapter: {
+    bookCode: {
       type: String,
       default: "",
+      trim: true,
+      index: true,
+    },
+
+    chapter: {
+      type: String,
+      required: true,
       trim: true,
     },
 
     chapterNumber: {
       type: Number,
-      default: null,
+      required: true,
+      min: 1,
     },
 
     sourceUrl: {
@@ -47,11 +59,13 @@ const textbookSchema = new mongoose.Schema(
     source: {
       type: String,
       default: "NCERT",
+      trim: true,
     },
 
     active: {
       type: Boolean,
       default: true,
+      index: true,
     },
   },
   {
@@ -62,10 +76,15 @@ const textbookSchema = new mongoose.Schema(
 textbookSchema.index({
   classNumber: 1,
   subject: 1,
+  language: 1,
   chapterNumber: 1,
 });
 
-export default mongoose.model(
-  "Textbook",
-  textbookSchema
-);
+textbookSchema.index({
+  classNumber: 1,
+  subject: 1,
+  language: 1,
+  bookCode: 1,
+});
+
+export default mongoose.model("Textbook", textbookSchema);

@@ -1,6 +1,8 @@
 ﻿import "dotenv/config";
 
 import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
 import http from "http";
 import mongoose from "mongoose";
 import cors from "cors";
@@ -24,6 +26,14 @@ import duelRoutes from "./routes/duel.js";
 import { startLeagueCron } from "./cron/league.js";
 import { registerDuelSocket } from "./socket/duelSocket.js";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const TEXTBOOK_ROOT = path.resolve(
+  __dirname,
+  "../../textbooks"
+);
+
 const app = express();
 
 const server = http.createServer(app);
@@ -42,6 +52,20 @@ app.use(
 );
 
 app.use(express.json());
+
+/*
+  Serve local NCERT textbook PDFs.
+
+  Example:
+  http://localhost:5000/textbooks/Class-10/Science/English/Science.pdf
+*/
+app.use(
+  "/textbooks",
+  express.static(TEXTBOOK_ROOT, {
+    fallthrough: false,
+    index: false,
+  })
+);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/cards", cardRoutes);
@@ -98,10 +122,9 @@ mongoose
   })
   .catch((err) => {
     console.error(
-      "Mongo connection error:",
+      "MongoDB connection failed:",
       err
     );
+
+    process.exit(1);
   });
-
-
-

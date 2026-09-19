@@ -1,0 +1,16 @@
+[
+  {
+    "class": "Class-10",
+    "subject": "Mathematics",
+    "language": "English",
+    "book": "Mathematics",
+    "file": "Class-10\\Mathematics\\English\\Mathematics.pdf"
+  },
+  {
+    "class": "Class-10",
+    "subject": "Science",
+    "language": "English",
+    "book": "Science",
+    "file": "Class-10\\Science\\English\\Science.pdf"
+  }
+]

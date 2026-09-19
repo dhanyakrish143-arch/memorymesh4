@@ -1,37 +1,23 @@
 ﻿import fs from "fs";
 import path from "path";
+import mongoose from "mongoose";
+import "dotenv/config";
+import Textbook from "../src/models/Textbook.js";
 
-const ROOT = path.resolve(
-  process.cwd(),
-  "..",
-  "textbooks"
-);
-
-const SUPPORTED = [
-  ".pdf"
-];
+const ROOT = path.resolve(process.cwd(), "..", "textbooks");
 
 function walk(dir) {
   const results = [];
 
-  for (const entry of fs.readdirSync(
-    dir,
-    { withFileTypes: true }
-  )) {
-    const fullPath =
-      path.join(dir, entry.name);
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name);
 
     if (entry.isDirectory()) {
       results.push(...walk(fullPath));
       continue;
     }
 
-    if (
-      SUPPORTED.includes(
-        path.extname(entry.name)
-          .toLowerCase()
-      )
-    ) {
+    if (path.extname(entry.name).toLowerCase() === ".pdf") {
       results.push(fullPath);
     }
   }
@@ -46,172 +32,120 @@ function clean(value) {
 }
 
 function extractMetadata(filePath) {
-  const relative =
-    path.relative(ROOT, filePath);
+  const relativePath = path.relative(ROOT, filePath);
+  const parts = relativePath.split(path.sep);
 
-  const parts =
-    relative.split(path.sep);
+  const fileName = path.basename(
+    filePath,
+    path.extname(filePath)
+  );
 
-  const fileName =
-    path.basename(
-      filePath,
-      path.extname(filePath)
-    );
+  const className = clean(parts[0]);
+  const subject = clean(parts[1]);
+  const language = clean(parts[2]) || "English";
+  const title = clean(fileName);
 
-  let className =
-    "Unknown";
-
-  let subject =
-    "General";
-
-  let language =
-    "English";
-
-  if (parts.length >= 3) {
-    className =
-      clean(parts[0]);
-
-    subject =
-      clean(parts[1]);
-
-    if (parts.length >= 4) {
-      language =
-        clean(parts[2]);
-    }
-  }
+  const classMatch = className.match(/\d+/);
+  const classNumber = classMatch
+    ? Number(classMatch[0])
+    : null;
 
   return {
-    className,
+    classNumber,
     subject,
     language,
-    book: clean(fileName),
-    filePath,
-    relativePath: relative,
+    title,
+    chapter: "",
+    chapterNumber: null,
+    relativePath,
   };
 }
 
 async function main() {
   if (!fs.existsSync(ROOT)) {
-    throw new Error(
-      `Textbook folder not found: ${ROOT}`
-    );
+    throw new Error(`Textbook folder not found: ${ROOT}`);
+  }
+
+  if (!process.env.MONGO_URI) {
+    throw new Error("MONGO_URI is not configured.");
   }
 
   const files = walk(ROOT);
 
   console.log("");
-  console.log(
-    "========================================"
-  );
-  console.log(
-    "MEMORYMESH LOCAL TEXTBOOK IMPORTER"
-  );
-  console.log(
-    "========================================"
-  );
-  console.log(
-    "Folder:",
-    ROOT
-  );
-  console.log(
-    "PDF files found:",
-    files.length
-  );
+  console.log("========================================");
+  console.log("MEMORYMESH LOCAL TEXTBOOK DATABASE IMPORT");
+  console.log("========================================");
+  console.log("PDF files found:", files.length);
   console.log("");
 
-  if (files.length === 0) {
-    console.log(
-      "No PDFs found."
-    );
-    console.log("");
-    console.log(
-      "Put your PDFs inside folders such as:"
-    );
-    console.log(
-      "textbooks/Class-10/Science/English/"
-    );
-    return;
-  }
+  await mongoose.connect(process.env.MONGO_URI);
 
-  const books =
-    files.map(extractMetadata);
+  let imported = 0;
 
-  for (
-    let i = 0;
-    i < books.length;
-    i += 1
-  ) {
-    const book = books[i];
+  for (const filePath of files) {
+    const book = extractMetadata(filePath);
 
-    console.log(
-      `[${i + 1}/${books.length}]`
-    );
-    console.log(
-      "Class:",
-      book.className
-    );
-    console.log(
-      "Subject:",
-      book.subject
-    );
-    console.log(
-      "Language:",
-      book.language
-    );
-    console.log(
-      "Book:",
-      book.book
-    );
-    console.log(
-      "File:",
+    if (!Number.isFinite(book.classNumber)) {
+      console.log("SKIP:", book.relativePath);
+      continue;
+    }
+
+    const sourceUrl =
+      "/textbooks/" +
       book.relativePath
-    );
-    console.log("");
-  }
+        .split(path.sep)
+        .map(encodeURIComponent)
+        .join("/");
 
-  const output =
-    path.resolve(
-      process.cwd(),
-      "textbook-catalog.json"
-    );
-
-  fs.writeFileSync(
-    output,
-    JSON.stringify(
-      books.map((book) => ({
-        class: book.className,
+    await Textbook.findOneAndUpdate(
+      {
+        classNumber: book.classNumber,
         subject: book.subject,
         language: book.language,
-        book: book.book,
-        file: book.relativePath
-      })),
-      null,
-      2
-    ),
-    "utf8"
-  );
+        title: book.title,
+      },
+      {
+        $set: {
+          classNumber: book.classNumber,
+          subject: book.subject,
+          language: book.language,
+          title: book.title,
+          chapter: book.chapter,
+          chapterNumber: book.chapterNumber,
+          sourceUrl,
+          source: "NCERT",
+          active: true,
+        },
+      },
+      {
+        upsert: true,
+        new: true,
+        setDefaultsOnInsert: true,
+      }
+    );
 
-  console.log(
-    "Catalog written to:"
-  );
-  console.log(output);
+    console.log(
+      `IMPORTED: Class-${book.classNumber} / ${book.subject} / ${book.title}`
+    );
+    console.log(`URL: ${sourceUrl}`);
+    console.log("");
 
+    imported++;
+  }
+
+  console.log("========================================");
+  console.log("DATABASE IMPORT COMPLETE");
+  console.log("Imported:", imported);
+  console.log("========================================");
   console.log("");
-  console.log(
-    "========================================"
-  );
-  console.log(
-    "IMPORT SCAN COMPLETE"
-  );
-  console.log(
-    "========================================"
-  );
+
+  await mongoose.disconnect();
 }
 
 main().catch((error) => {
-  console.error(
-    "Importer failed:",
-    error.message
-  );
+  console.error("");
+  console.error("IMPORT FAILED:");
+  console.error(error);
   process.exit(1);
 });

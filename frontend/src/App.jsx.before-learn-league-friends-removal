@@ -1,4 +1,4 @@
-import {
+﻿import {
   BrowserRouter,
   Routes,
   Route,
@@ -12,7 +12,7 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 
 import Login from "./pages/Login";
 import Home from "./pages/Home";
-
+import Learn from "./pages/Learn";
 import Upload from "./pages/Upload";
 import Progress from "./pages/Progress";
 import Cards from "./pages/Cards";
@@ -32,8 +32,8 @@ import RapidFire from "./pages/RapidFire";
 import FillInStory from "./pages/FillInStory";
 import TimelineDrop from "./pages/TimelineDrop";
 import QuizHistory from "./pages/QuizHistory";
-
-
+import League from "./pages/League";
+import Friends from "./pages/Friends";
 import Duel from "./pages/Duel";
 
 function Private({ children }) {
@@ -82,6 +82,13 @@ function Nav() {
         className={location.pathname === "/" ? "active" : ""}
       >
         Home
+      </Link>
+
+      <Link
+        to="/learn"
+        className={location.pathname === "/learn" ? "active" : ""}
+      >
+        Learn
       </Link>
       <Link
         to="/games"
@@ -140,7 +147,21 @@ function Nav() {
         className={location.pathname === "/activity" ? "active" : ""}
       >
         Activity
-      </Link>
+      </Link>        <Link
+          to="/league"
+          className={location.pathname === "/league" ? "active" : ""}
+        >
+          League
+        </Link>
+
+
+      
+        <Link
+          to="/friends"
+          className={location.pathname === "/friends" ? "active" : ""}
+        >
+          Friends
+        </Link>
 <Link
         to="/achievements"
         className={
@@ -274,6 +295,14 @@ function AppRoutes() {
           }
         />
 
+        <Route
+          path="/learn"
+          element={
+            <Private>
+              <Learn />
+            </Private>
+          }
+        />
 
         <Route
           path="/upload"
@@ -359,7 +388,23 @@ function AppRoutes() {
               </Private>
             }
           />
+          <Route
+            path="/friends"
+            element={
+              <Private>
+                <Friends />
+              </Private>
+            }
+          />
 
+                  <Route
+            path="/league"
+            element={
+              <Private>
+                <League />
+              </Private>
+            }
+          />
 <Route
           path="/achievements"
           element={
@@ -455,8 +500,6 @@ export default function App() {
     </BrowserRouter>
   );
 }
-
-
 
 
 
