@@ -27,7 +27,6 @@ import Exam from "./pages/Exam";
 import FocusMode from "./pages/FocusMode";
 import Games from "./pages/Games";
 import WordMatch from "./pages/WordMatch";
-import Notes from "./pages/Notes";
 import RapidFire from "./pages/RapidFire";
 import FillInStory from "./pages/FillInStory";
 import TimelineDrop from "./pages/TimelineDrop";
@@ -293,10 +292,8 @@ function AppRoutes() {
           }
         />
         <Route
-          path="/notes"
           element={
             <Private>
-              <Notes />
             </Private>
           }
         />
